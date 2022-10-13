@@ -17,7 +17,10 @@ my $ap = Getopt::ArgParse->new_parser(
 $ap->add_args(
     ['--character-matrix', '-c', required => 1, help => 'Input character matrix as CSV.'],
     ['--mutation-priors', '-m', required => 1, help => 'Input mutation prior probabilities as CSV.'],
-    ['--output', '-o', required => 1, help => 'Output directory name.']
+    ['--output', '-o', required => 1, help => 'Output directory name.'],
+    ['--time-limit', required => 0, help => 'Time limit for ILP solver.', default => 7200],
+    ['--threads', required => 0, help => 'Number of threads for ILP solver.', default => 8],
+    ['--mip-gap', required => 0, help => 'Optimality gap for ILP solver.', default => 0.05],
 );
 
 my $ns = $ap->parse_args();
@@ -51,7 +54,7 @@ my $m = scalar @{$aoa->[0]};
 
 my @startle_args = (
     $STARTLE, "-n", "$n", "-m", "$m",
-    "-t", "48", "-T", "7200", "-g", "0.05",
+    "-t", $ns->threads, "-T", $ns->time_limit, "-g", $ns->mip_gap,
     $one_indices, $missing_indices, $counts,
     $char_mut_mapping, $weights, $results,
 );
