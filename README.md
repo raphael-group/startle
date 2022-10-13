@@ -1,6 +1,6 @@
 # startle
 
-startle is a set of methods for lineage tree reconstruction that attempts 
+*Startle* is a set of methods for lineage tree reconstruction that attempts 
 to infer the most parsimonious tree under the *star homoplasy* evolutionary 
 model. 
 
@@ -93,9 +93,9 @@ runs. The example lineage tree was built for 100 cells and 30 characters with dr
 to `20%`. The ground truth tree is also included for comparison across methods.
 
 ```
-$ perl scripts/startle\_ilp.pl -c examples/n100\_m30\_d0.2\_s0\_p0.2\_character\_matrix.csv\
-                              -m examples/n100\_m30\_d0.2\_s0\_p0.2\_mutation_prior.csv\
-                              -o example\_output
+$ perl scripts/startle_ilp.pl -c examples/n100_m30_d0.2_s0_p0.2_character_matrix.csv\
+                              -m examples/n100_m30_d0.2_s0_p0.2_mutation_prior.csv\
+                              -o example_output
 ```
 
 ## startle-NNI
