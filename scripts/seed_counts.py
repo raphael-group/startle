@@ -77,7 +77,7 @@ def main(args):
                                                  missing_state_indicator = int(args.m),
                                                  priors = character_state_prior)
     
-    solver_dict = {"greedy": cas.solver.VanillaGreedySolver(),
+    solver_dict = {'greedy': cas.solver.VanillaGreedySolver(),
                    'upgma': cas.solver.UPGMASolver(dissimilarity_function=cas.solver.dissimilarity.weighted_hamming_distance),
                    'nj': cas.solver.NeighborJoiningSolver(dissimilarity_function=cas.solver.dissimilarity.weighted_hamming_distance, add_root=True),
                    'ILP': cas.solver.ILPSolver(convergence_time_limit=3600),

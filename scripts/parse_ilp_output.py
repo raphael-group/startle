@@ -1,23 +1,16 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Aug 12 2022
-
-@author: Palash Sashittal
-"""
-
 import argparse
 import sys
 import pandas as pd
 import seaborn as sns
 import numpy as np
+import networkx as nx
 import math
 import itertools
 import json
+
 from collections import Counter
 from collections import defaultdict
 from Bio import Phylo
-import networkx as nx
 
 def generate_perfect_phylogeny(df_binary):
     solT_mut = nx.DiGraph()
