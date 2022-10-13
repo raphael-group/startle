@@ -3,6 +3,8 @@
 startle is a method for lineage tree reconstruction that uses the
 *star homoplasy* evolutionary model. 
 
+![overview](docs/overview.pdf)
+
 If you found the tool useful in your research, please cite us at:
 ```
 ```
