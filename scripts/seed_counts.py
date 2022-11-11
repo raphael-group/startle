@@ -25,7 +25,7 @@ def get_character_taxon_dataframe(fname):
     
     return pd.DataFrame(np.vstack(state_list), index=cell_list, columns = [f'c{i}' for i in range(len(state_list[0]))])
 
-def display_counts(tree):
+def display_counts(character_matrix, tree):
     tree.collapse_mutationless_edges(True)
 
     count_dict = defaultdict(dict)
@@ -43,11 +43,13 @@ def display_counts(tree):
         else:
             count_dict[c][s] = 1
 
+    characters = list(character_matrix.columns)
+
     print('character,state,mutation,count')
-    for character, count_data in count_dict.items():
+    for idx, count_data in count_dict.items():
         for state, count in count_data.items():
             if state == 0: continue
-            print(f'c{character},{state},c{character}_{state},{count}')
+            print(f'{characters[idx]},{state},{characters[idx]}_{state},{count}')
 
 def main(args):
     random.seed(0)
@@ -86,7 +88,7 @@ def main(args):
     solver = solver_dict[args.s]
     solver.solve(reconstructed_tree)
 
-    display_counts(reconstructed_tree)
+    display_counts(df, reconstructed_tree)
 
 def str2bool(v):
     if isinstance(v, bool):
