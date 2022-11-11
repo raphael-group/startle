@@ -36,6 +36,11 @@ def parse_args():
         help="Mutation priors in CSV format."
     )
 
+    p.add_argument(
+        "--output",
+        help="Output directory"
+    )
+
     return p.parse_args()
 
 """
@@ -118,20 +123,60 @@ if __name__ == "__main__":
         character_idx = int(character[1:])
         mutation_prior_dict[character_idx][str(int(row['state']))] = row['probability']
 
-    lenti_groups = input_character_matrix['c0'].unique()
+    imputed_character_matrix = input_character_matrix.copy()
+
     lenti_trees  = {}
-    for lenti_group in lenti_groups:
-        if lenti_group == -1: continue
+    while True:
+        lenti_groups = imputed_character_matrix['c0'].unique()
+        lenti_trees  = {}
+        for lenti_group in lenti_groups:
+            if lenti_group == -1: continue
 
-        lenti_cm = input_character_matrix[input_character_matrix['c0'] == lenti_group].copy().drop(columns=['c0'])
-        lenti_tree = startle_ilp(lenti_cm, input_mutation_priors)
-        lenti_cm = lenti_cm.astype(str)
+            lenti_cm = imputed_character_matrix[imputed_character_matrix['c0'] == lenti_group].copy().drop(columns=['c0'])
+            lenti_tree = startle_ilp(lenti_cm, input_mutation_priors)
+            lenti_cm = lenti_cm.astype(str)
 
-        # labeling is a function from (character, nodes) -> state
-        parsimony, parsimony_scores, labeling = small_parsimony(mutation_prior_dict, lenti_tree, lenti_cm)
-        lenti_trees[lenti_group] = (labeling, lenti_tree)
+            # labeling is a function from (character, nodes) -> state
+            parsimony, parsimony_scores, labeling = small_parsimony(mutation_prior_dict, lenti_tree, lenti_cm)
 
-        # test_cell = input_character_matrix[input_character_matrix['c0'] == -1].copy().iloc[0].astype(str)
-        # test_cell = {c: s for c, s in test_cell.items()}
-        # cell_distance = star_homoplasy_distance(lenti_tree, labeling, test_cell)
-        # print(cell_distance)
+            def compute_distance_to_lenti_tree(cell, lenti_tree=lenti_tree, labeling=labeling):
+                cell = {c: s for c, s in cell.items()}    
+                return star_homoplasy_distance(lenti_tree, labeling, cell)
+
+            lenti_trees[lenti_group] = {
+                "labeling": labeling,
+                "tree": lenti_tree,
+                "group": lenti_group,
+                "distance_func": compute_distance_to_lenti_tree
+            }
+
+        # randomly select unlabeled cells
+        unlabeled_cells = imputed_character_matrix[imputed_character_matrix['c0'] == -1].copy().astype(str).sample(frac=1)
+        placed_cell = False
+        for idx, unlabeled_cell in unlabeled_cells.iterrows():
+            distances = []
+            for l in lenti_trees.values():
+                d = l["distance_func"](unlabeled_cell)
+                distances.append((d, l["group"]))
+
+            distances = sorted(distances, key=lambda x: x[0])
+            concordance_score = (distances[1][0] - distances[0][0]) / (distances[-1][0] - distances[0][0])
+            if concordance_score > 0.5:
+                imputed_character_matrix.loc[idx, "c0"] = distances[0][1]
+                placed_cell = True
+                logger.info("Placed cell!")
+
+        if not placed_cell:
+            break
+    
+    os.makedirs(args.output, exist_ok=True)
+    imputed_character_matrix.to_csv(f"{args.output}/imputed_character_matrix.csv")
+
+    newick_string = "("
+    for l in lenti_trees.values():
+        newick_string += tree_to_newick(l["tree"]) + ","
+
+    newick_string += ");"
+
+    with open(f"{args.output}/tree.newick", "w") as f:
+        f.write(newick_string)
