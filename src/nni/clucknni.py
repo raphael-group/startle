@@ -78,13 +78,18 @@ def small_parsimony(mutation_prior_dict, T, df, weighted=True):
         character_idx = int(character[1:]) # i.e. 'r7' -> 7
 
         if weighted:
-            weight_function = lambda s: -np.log(mutation_prior_dict[character_idx][s])
+            def weight_function(s):
+                return -np.log(mutation_prior_dict[character_idx][s])
         else:
             weight_function = lambda s: 1
 
         labeling, parsimony_score = small_parsimony_fixed_character(T, df[character], 'root', weight_function)
 
         root_state = labeling['root']
+        if root_state == '-1':
+            root_state = '0'
+            labeling['root'] = root_state
+
         if root_state != '0':
             parsimony_score['root'] += weight_function(root_state)
 
