@@ -68,8 +68,11 @@ def main(args):
         df_mutation_prior = df_mutation_prior.set_index(['character', 'state'])
         character_state_prior = {}
         for idx, character in enumerate(list(df.columns)):
-            state_list = list(df_mutation_prior.loc[character].index)
             character_state_prior[idx] = {}
+            try:
+                state_list = list(df_mutation_prior.loc[character].index)
+            except KeyError:
+                continue
             for state in state_list:
                 character_state_prior[idx][int(state)] = df_mutation_prior.loc[character, state]['probability']
     else:
