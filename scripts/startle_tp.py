@@ -82,16 +82,15 @@ def startle_ilp(character_matrix, mutation_priors):
 """
 Cell is a row of the character matrix.
 """
-def star_homoplasy_distance(tree, labeling, cell):
-    # TODO: use weighted distance instead
+def star_homoplasy_distance(tree, labeling, cell, cost_f):
     def distance(node, cell):
         d, visit_child = 0, True
         for (character, character_labeling) in labeling.items():
             node_state = character_labeling[node]
             cell_state = cell[character]
 
-            if node_state != cell_state and cell_state != '-1':
-                d += 1
+            if node_state != cell_state and cell_state != '-1' and cell_state != '0':
+                d += cost_f(character, cell_state)
 
             if node_state != '0' and cell_state == '0':
                 visit_child = False
@@ -125,6 +124,9 @@ if __name__ == "__main__":
 
     imputed_character_matrix = input_character_matrix.copy()
 
+    # cost_f = lambda c, s: 1 # unweighted parsimony version
+    cost_f = lambda c, s: -np.log(mutation_prior_dict[int(c[1:])][s])
+
     lenti_trees  = {}
     while True:
         lenti_groups = imputed_character_matrix['c0'].unique()
@@ -141,7 +143,7 @@ if __name__ == "__main__":
 
             def compute_distance_to_lenti_tree(cell, lenti_tree=lenti_tree, labeling=labeling):
                 cell = {c: s for c, s in cell.items()}    
-                return star_homoplasy_distance(lenti_tree, labeling, cell)
+                return star_homoplasy_distance(lenti_tree, labeling, cell, cost_f)
 
             lenti_trees[lenti_group] = {
                 "labeling": labeling,
@@ -150,9 +152,9 @@ if __name__ == "__main__":
                 "distance_func": compute_distance_to_lenti_tree
             }
 
-        # randomly select unlabeled cells
+        # randomly re-order unlabeled cells
         unlabeled_cells = imputed_character_matrix[imputed_character_matrix['c0'] == -1].copy().astype(str).sample(frac=1)
-        placed_cell = False
+        placed_cells = []
         for idx, unlabeled_cell in unlabeled_cells.iterrows():
             distances = []
             for l in lenti_trees.values():
@@ -160,15 +162,21 @@ if __name__ == "__main__":
                 distances.append((d, l["group"]))
 
             distances = sorted(distances, key=lambda x: x[0])
-            concordance_score = (distances[1][0] - distances[0][0]) / (distances[-1][0] - distances[0][0])
-            if concordance_score > 0.5:
-                imputed_character_matrix.loc[idx, "c0"] = distances[0][1]
-                placed_cell = True
-                logger.info("Placed cell!")
+            if distances[-1][0] == distances[0][0]: continue
 
-        if not placed_cell:
+            concordance_score = (distances[1][0] - distances[0][0]) / (distances[-1][0] - distances[0][0])
+            if concordance_score > 0.25:
+                placed_cells.append((idx, distances[0][1]))
+
+        if not placed_cells:
             break
     
+        num_placed = math.ceil(len(placed_cells) / 2)
+        logger.info(f"Placing a random subset of {num_placed} cells.")
+        for i in range(num_placed):
+            idx, state = placed_cells[i]
+            imputed_character_matrix.loc[idx, "c0"] = state
+
     os.makedirs(args.output, exist_ok=True)
     imputed_character_matrix.to_csv(f"{args.output}/imputed_character_matrix.csv")
 
