@@ -250,7 +250,7 @@ def compute_parsimony(mutation_prior_dict, T, character_matrix):
 """
 Stochastically pertubs T using NNI operations.
 """
-def stochastic_nni(T, aggression=0.25):
+def stochastic_nni(T, aggression=0.30):
     T = T.copy()
 
     internal_edges = [(u, v) for (u, v) in T.edges if not is_leaf(T, v)]
@@ -376,7 +376,7 @@ def hill_climb_on_edges(scoring_function, current_tree, edge_set):
 Performs hill climbing until a local
 optima has been reached.
 """
-def hill_climb(T, scoring_function, threads=32):
+def hill_climb(T, scoring_function, threads=8):
     overall_best_tree = T
     processor_pool = mp.Pool(threads)
     
@@ -452,12 +452,14 @@ def parse_args():
 
     p.add_argument("seed_tree", help="Seed tree in Newick format.")
     p.add_argument("character_matrix", help="Character matrix.")
-    p.add_argument("mutation_prior", help="Mutation prior pickle file.")
+    p.add_argument("-d", help="Mutation prior pickle file.")
+    p.add_argument("-m", help="Mutation prior CSV table.")
+
     p.add_argument(
         "--iterations",
         help="Number of iterations to run stochastic hill climbing before giving up.",
         type=int,
-        default=100
+        default=250
     )
 
     p.add_argument(
@@ -471,14 +473,26 @@ def parse_args():
 
     return p.parse_args()
 
+def load_mutation_prior_dict(args):
+    if args.m:
+        mutation_prior_dict = defaultdict(dict)
+        input_mutation_priors = pd.read_csv(args.m, index_col=0)
+        for (character, row) in input_mutation_priors.iterrows():
+            character_idx = int(character[1:])
+            mutation_prior_dict[character_idx][str(int(row['state']))] = row['probability']
+
+        return mutation_prior_dict
+    elif args.e:
+        with open(args.e, 'rb') as f:
+            return pickle.load(f)
+
 def score_mode(args):
     seed_tree = from_newick_get_nx_tree(args.seed_tree)
 
     character_matrix = pd.read_csv(args.character_matrix, index_col=[0], sep='\t', dtype=str)
     character_matrix = character_matrix.replace('-', '-1')
 
-    with open(args.mutation_prior, 'rb') as f:
-        mutation_prior_dict = pickle.load(f)
+    mutation_prior_dict = load_mutation_prior_dict(args)
 
     seed_parsimony = compute_parsimony(mutation_prior_dict, seed_tree, character_matrix) 
     logger.info(f"Seed tree parsimony: {seed_parsimony}")
@@ -489,8 +503,7 @@ def collapse_mode(args):
     character_matrix = pd.read_csv(args.character_matrix, index_col=[0], sep='\t', dtype=str)
     character_matrix = character_matrix.replace('-', '-1')
 
-    with open(args.mutation_prior, 'rb') as f:
-        mutation_prior_dict = pickle.load(f)
+    mutation_prior_dict = load_mutation_prior_dict(args)
 
     input_tree_contracted = collapse_mutationless_edges(input_tree, character_matrix)
     newick_tree = tree_to_newick(input_tree_contracted)
@@ -528,11 +541,11 @@ def infer_mode(args):
     seed_tree = from_newick_get_nx_tree(args.seed_tree)
     seed_tree = arbitrarily_resolve_polytomies(seed_tree)
 
-    character_matrix = pd.read_csv(args.character_matrix, index_col=[0], sep='\t', dtype=str)
+    character_matrix = pd.read_csv(args.character_matrix, index_col=[0], dtype=str)
     character_matrix = character_matrix.replace('-', '-1')
+    character_matrix.index = character_matrix.index.map(str)
 
-    with open(args.mutation_prior, 'rb') as f:
-        mutation_prior_dict = pickle.load(f)
+    mutation_prior_dict = load_mutation_prior_dict(args)
 
     scoring_function = ScoringFunction(mutation_prior_dict, character_matrix)
 
@@ -542,7 +555,7 @@ def infer_mode(args):
     candidate_trees = []
     for i in range(1):
         candidate_tree = seed_tree.copy() 
-
+        candidate_tree = stochastic_nni(candidate_tree, aggression=1.3)
         candidate_parsimony = scoring_function.score(candidate_tree) 
         candidate_trees.append((candidate_tree, candidate_parsimony))
 
@@ -585,6 +598,10 @@ def infer_mode(args):
 
 if __name__ == "__main__":
     args = parse_args()
+
+    if not args.m and not args.e:
+        print("Please specify either a mutation prior dictionary or CSV.")
+        sys.exit(1)
 
     if args.mode == 'collapse':
         collapse_mode(args)
