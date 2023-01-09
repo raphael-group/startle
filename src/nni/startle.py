@@ -452,7 +452,7 @@ def parse_args():
 
     p.add_argument("seed_tree", help="Seed tree in Newick format.")
     p.add_argument("character_matrix", help="Character matrix.")
-    p.add_argument("-d", help="Mutation prior pickle file.")
+    p.add_argument("-e", help="Mutation prior pickle file.")
     p.add_argument("-m", help="Mutation prior CSV table.")
 
     p.add_argument(
