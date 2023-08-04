@@ -127,7 +127,7 @@ directory.
 
 ```
 $ python src/nni/startle.py --help
-usage: startle.py [-h] [-e E] [-m M] [--iterations ITERATIONS] [--mode {collapse,score,infer}] --output OUTPUT seed_tree character_matrix
+usage: startle.py [-h] [-e E] [-m M] [--iterations ITERATIONS] [--mode {collapse,score,infer}] [--threads THREADS] --output OUTPUT seed_tree character_matrix
 
 positional arguments:
   seed_tree             Seed tree in Newick format.
@@ -141,6 +141,7 @@ options:
                         Number of iterations to run stochastic hill climbing before giving up.
   --mode {collapse,score,infer}
                         Different modes have different functionality.
+  --threads THREADS     Number of threads to use.
   --output OUTPUT       Output file for newick tree.
 ```
 
@@ -160,3 +161,16 @@ $ python src/nni/startle.py -m examples/n100_m30_d0.2_s0_p0.2_mutation_prior.csv
   examples/n100_m30_d0.2_s0_p0.2_seed_tree.newick examples/n100_m30_d0.2_s0_p0.2_character_matrix.csv \
   --output examples/n100_m30_d0.2_s0_p0.2_startle_nni_tree.newick
 ```
+
+There are several important command line flags that
+can alter the behavior of `startle-nni`. These are described here:
+- `--threads`: sets the number of threads to use when performing hill climbing, 
+   can be set to the number of cores to speed up the algorithm.
+- `--iterations`: the number of iterations to run hill climbing *without any improvement*
+   to the parsimony objective before stopping.
+- `--mode`: can be set to one of `{collapse, score, infer}`. `infer` is the default
+   mode to be used when trying to infer a tree using `startle-nni`. `score` is used
+   to compute the value of the small parsimony objective using the star homoplasy model
+   on the input tree. `collapse` collapses mutationless edges after inferring ancestral
+   labelings using the small parsimony objective under the star homoplasy model on the 
+   input tree.

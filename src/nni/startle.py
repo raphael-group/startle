@@ -469,6 +469,13 @@ def parse_args():
         help="Different modes have different functionality."
     )
 
+    p.add_argument(
+        "--threads",
+        help="Number of threads to use.",
+        type=int,
+        default=8
+    )
+
     p.add_argument("--output", help="Output file for newick tree.", required=True)
 
     return p.parse_args()
@@ -572,7 +579,7 @@ def infer_mode(args):
         candidate_tree, _ = random.sample(candidate_trees, 1)[0]
         if len(candidate_trees) != 1:
             candidate_tree = stochastic_nni(candidate_tree)
-        candidate_tree_optimized = hill_climb(candidate_tree, scoring_function)
+        candidate_tree_optimized = hill_climb(candidate_tree, scoring_function, threads=args.threads)
         candidate_tree_optimized_parsimony = scoring_function.score(candidate_tree_optimized)
 
         if len(candidate_trees) < 5:
