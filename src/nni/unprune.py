@@ -7,27 +7,6 @@ import argparse
 from collections import deque
 from utilities import *
 
-def tree_to_newick_eq_classes(T, eq_class_dict, root=None):
-    if root is None:
-        roots = list(filter(lambda p: p[1] == 0, T.in_degree()))
-        assert 1 == len(roots)
-        root = roots[0][0]
-    subgs = []
-    while len(T[root]) == 1:
-        root = list(T[root])[0]
-    for child in T[root]:
-        while len(T[child]) == 1:
-            child = list(T[child])[0]
-        if len(T[child]) > 0:
-            subgs.append(tree_to_newick_eq_classes(T, eq_class_dict, root=child))
-        else:
-            eq_class = eq_class_dict[child]
-            if len(eq_class) > 1:
-                subgs.append("(" + ','.join(map(str, eq_class)) + ")")
-            else:
-                subgs.append(eq_class[0])
-    return "(" + ','.join(map(str, subgs)) + ")"
-
 def parse_args():
     p = argparse.ArgumentParser(
         description="Reattaches equivalence classes to generated Newick tree."

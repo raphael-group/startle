@@ -5,6 +5,7 @@ import pickle
 import re
 import glob
 import sys
+import cProfile
 
 import pandas as pd
 import networkx as nx
@@ -196,46 +197,6 @@ def recompute_small_parsimony(mutation_prior_dict, T, df, parsimony_scores, labe
     return parsimony
 
 """
-Collapses mutationless edges as defined by an
-optimal Star Camin-Sokal labeling of
-the internal vertices.
-"""
-def collapse_mutationless_edges(T, df):
-    T = T.copy()
-
-    # property of labeling:
-    #   if a vertex v is labeled by a missing state,
-    #   then all children of v are labeled by a missing
-    #   state
-    labeling_dict, _ = compute_labeling_count(T, df)
-
-    while True:
-        roots = list(filter(lambda p: p[1] == 0, T.in_degree()))
-
-        no_contractions = True
-        for (u, v) in T.edges:
-            if is_leaf(T, v):
-                continue
-
-            if not all((labeling[u] == labeling[v] or labeling[v] == '-1') for labeling in labeling_dict.values()):
-                continue
-
-            T.remove_edge(u, v)
-            for w in list(T[v].keys()):
-                T.remove_edge(v, w)
-                T.add_edge(u, w)
-
-            T.remove_node(v)
-
-            no_contractions = False
-            break
-
-        if no_contractions:
-            break
-
-    return T
-
-"""
 Utility function for computing two types of scores
 """
 def compute_parsimony(mutation_prior_dict, T, character_matrix):
@@ -331,38 +292,6 @@ def hill_climb_on_edges(scoring_function, current_tree, edge_set):
     if nni_best_move is None:
         return current_tree, nni_best_score
 
-    # # perform all non-conflicting moves
-    # conflicting_vertices = set()
-    # non_conflicting_positive_moves = []
-    # for nni_move in positive_moves:
-    #     (u, w), (v, z) = nni_move["move"]
-    #     if u in conflicting_vertices or v in conflicting_vertices:
-    #         continue
-
-    #     non_conflicting_positive_moves.append(nni_move)
-    #     conflicting_vertices.update([u, w, v, z])
-
-    #     current_tree.remove_edge(u, w) 
-    #     current_tree.remove_edge(v, z)
-    #     current_tree.add_edge(v, w)
-    #     current_tree.add_edge(u, z) 
-
-    # # check if all moves is better than best move
-    # non_conflicting_score = scoring_function.score(current_tree)
-    # if non_conflicting_score > nni_best_score:
-    #     logger.info(f"Many simultaneous NNIs applied: {non_conflicting_score} > {nni_best_score}")
-    #     return current_tree, non_conflicting_score
-
-    # # undo all moves
-    # for nni_move in non_conflicting_positive_moves:
-    #     (u, w), (v, z) = nni_move["move"]
-
-    #     current_tree.add_edge(u, w) 
-    #     current_tree.add_edge(v, z)
-    #     current_tree.remove_edge(v, w)
-    #     current_tree.remove_edge(u, z) 
-
-    # else use only one move
     (u, w), (v, z) = nni_best_move 
 
     current_tree.remove_edge(u, w) 
@@ -408,6 +337,46 @@ def hill_climb(T, scoring_function, threads=8):
     return overall_best_tree
 
 """
+Collapses mutationless edges as defined by an
+optimal Star Camin-Sokal labeling of
+the internal vertices.
+"""
+def collapse_mutationless_edges(T, df):
+    T = T.copy()
+
+    # property of labeling:
+    #   if a vertex v is labeled by a missing state,
+    #   then all children of v are labeled by a missing
+    #   state
+    labeling_dict, _ = compute_labeling_count(T, df)
+
+    while True:
+        roots = list(filter(lambda p: p[1] == 0, T.in_degree()))
+
+        no_contractions = True
+        for (u, v) in T.edges:
+            if is_leaf(T, v):
+                continue
+
+            if not all((labeling[u] == labeling[v] or labeling[v] == '-1') for labeling in labeling_dict.values()):
+                continue
+
+            T.remove_edge(u, v)
+            for w in list(T[v].keys()):
+                T.remove_edge(v, w)
+                T.add_edge(u, w)
+
+            T.remove_node(v)
+
+            no_contractions = False
+            break
+
+        if no_contractions:
+            break
+
+    return T
+
+"""
 Converts a non-binary phylogenetic tree to a binary
 phylogenetic tree on the same leaf set. 
 """
@@ -447,39 +416,6 @@ def arbitrarily_resolve_polytomies(T):
 
     return T
 
-def parse_args():
-    p = argparse.ArgumentParser()
-
-    p.add_argument("seed_tree", help="Seed tree in Newick format.")
-    p.add_argument("character_matrix", help="Character matrix.")
-    p.add_argument("-e", help="Mutation prior pickle file.")
-    p.add_argument("-m", help="Mutation prior CSV table.")
-
-    p.add_argument(
-        "--iterations",
-        help="Number of iterations to run stochastic hill climbing before giving up.",
-        type=int,
-        default=250
-    )
-
-    p.add_argument(
-        "--mode",
-        choices=['collapse', 'score', 'infer'],
-        default='infer',
-        help="Different modes have different functionality."
-    )
-
-    p.add_argument(
-        "--threads",
-        help="Number of threads to use.",
-        type=int,
-        default=8
-    )
-
-    p.add_argument("--output", help="Output file for newick tree.", required=True)
-
-    return p.parse_args()
-
 def load_mutation_prior_dict(args):
     if args.m:
         mutation_prior_dict = defaultdict(dict)
@@ -495,9 +431,11 @@ def load_mutation_prior_dict(args):
 
 def score_mode(args):
     seed_tree = from_newick_get_nx_tree(args.seed_tree)
+    seed_tree = arbitrarily_resolve_polytomies(seed_tree)
 
-    character_matrix = pd.read_csv(args.character_matrix, index_col=[0], sep='\t', dtype=str)
+    character_matrix = pd.read_csv(args.character_matrix, index_col=[0], dtype=str)
     character_matrix = character_matrix.replace('-', '-1')
+    character_matrix.index = character_matrix.index.map(str)
 
     mutation_prior_dict = load_mutation_prior_dict(args)
 
@@ -507,8 +445,9 @@ def score_mode(args):
 def collapse_mode(args):
     input_tree = from_newick_get_nx_tree(args.seed_tree)
 
-    character_matrix = pd.read_csv(args.character_matrix, index_col=[0], sep='\t', dtype=str)
+    character_matrix = pd.read_csv(args.character_matrix, index_col=[0], dtype=str)
     character_matrix = character_matrix.replace('-', '-1')
+    character_matrix.index = character_matrix.index.map(str)
 
     mutation_prior_dict = load_mutation_prior_dict(args)
 
@@ -552,10 +491,15 @@ def infer_mode(args):
     character_matrix = character_matrix.replace('-', '-1')
     character_matrix.index = character_matrix.index.map(str)
 
+    logger.info(f"Unpruned tree size: {len(seed_tree.nodes)}")
+    eq_class_dict, character_matrix = compute_equivalence_classes(character_matrix)
+    seed_tree = prune_tree(seed_tree, set(eq_class_dict.keys()))
+    character_matrix = character_matrix.astype(str)
+    logger.info(f"Pruned tree size: {len(seed_tree.nodes)}")
+ 
     mutation_prior_dict = load_mutation_prior_dict(args)
 
     scoring_function = ScoringFunction(mutation_prior_dict, character_matrix)
-
     seed_parsimony = compute_parsimony(mutation_prior_dict, seed_tree, character_matrix) 
     logger.info(f"Seed tree parsimony: {seed_parsimony}")
 
@@ -599,9 +543,42 @@ def infer_mode(args):
         candidate_trees = [(candidate_tree_optimized, candidate_tree_optimized_parsimony)] + candidate_trees[:-1]
 
         best_tree_contracted = collapse_mutationless_edges(candidate_trees[0][0], character_matrix)
-        newick_tree = tree_to_newick(best_tree_contracted)
+        newick_tree = tree_to_newick_eq_classes(best_tree_contracted, eq_class_dict)
         with open(args.output, 'w') as f:
             f.write(f"{newick_tree};")
+
+def parse_args():
+    p = argparse.ArgumentParser()
+
+    p.add_argument("seed_tree", help="Seed tree in Newick format.")
+    p.add_argument("character_matrix", help="Character matrix.")
+    p.add_argument("-e", help="Mutation prior pickle file.")
+    p.add_argument("-m", help="Mutation prior CSV table.")
+
+    p.add_argument(
+        "--iterations",
+        help="Number of iterations to run stochastic hill climbing before giving up.",
+        type=int,
+        default=250
+    )
+
+    p.add_argument(
+        "--mode",
+        choices=['collapse', 'score', 'infer'],
+        default='infer',
+        help="Different modes have different functionality."
+    )
+
+    p.add_argument(
+        "--threads",
+        help="Number of threads to use.",
+        type=int,
+        default=8
+    )
+
+    p.add_argument("--output", help="Output file for newick tree.", required=True)
+
+    return p.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()

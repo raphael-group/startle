@@ -1,22 +1,13 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jan 18 2022
-
-@author: Palash Sashittal
-"""
-
 import pandas as pd
 import seaborn as sns
 import numpy as np
 import math
 import itertools
-from collections import Counter
-from collections import defaultdict
-from Bio import Phylo
 import networkx as nx
-# import cassiopeia as cas
-# from cassiopeia.critique import critique_utilities
+
+from collections import Counter
+from collections import defaultdict, deque
+from Bio import Phylo
 
 def get_binary_dataframe(df, root_state = '0', missing_state='-1'):
     character_state_dict = {c:list(df[c].unique()) for c in df.columns}
@@ -211,4 +202,98 @@ def tree_to_newick(T, root=None):
         else:
             subgs.append(child)
     return "(" + ','.join(map(str, subgs)) + ")"
+
+def tree_to_newick_eq_classes(T, eq_class_dict, root=None):
+    if root is None:
+        roots = list(filter(lambda p: p[1] == 0, T.in_degree()))
+        assert 1 == len(roots)
+        root = roots[0][0]
+    subgs = []
+    while len(T[root]) == 1:
+        root = list(T[root])[0]
+    for child in T[root]:
+        while len(T[child]) == 1:
+            child = list(T[child])[0]
+        if len(T[child]) > 0:
+            subgs.append(tree_to_newick_eq_classes(T, eq_class_dict, root=child))
+        else:
+            eq_class = eq_class_dict[child]
+            if len(eq_class) > 1:
+                subgs.append("(" + ','.join(map(str, eq_class)) + ")")
+            else:
+                subgs.append(eq_class[0])
+    return "(" + ','.join(map(str, subgs)) + ")"
+
+"""
+Computes the equivalence classes of the rows
+of the input character matrix. 
+
+It outputs both the set of equivalence classes
+and pruned character matrix.
+"""
+def compute_equivalence_classes(df_character_matrix):
+    df_character_matrix = df_character_matrix.copy()
+    df_character_matrix = df_character_matrix.astype(int)
+
+    ncells = len(df_character_matrix)
+    binary_col_dict = {}
+    for column in df_character_matrix.columns:
+        state_list = list(df_character_matrix[column].unique())
+        for s in state_list:
+            if s != -1 and s != 0:
+                state_col = np.zeros((ncells))
+                state_col[df_character_matrix[column] == s] = 1
+                state_col[df_character_matrix[column] == -1] = -1
+
+                binary_col_dict[f'{column}_{s}'] = state_col
+
+    df_binary = pd.DataFrame(binary_col_dict, index = df_character_matrix.index, dtype=int)
+     
+    one_set_dict = {}
+    zero_set_dict = {}
+    for cell in df_binary.index:
+        one_set_dict[cell] = set([x for x, y in df_binary.loc[cell].items() if y == 1])
+        zero_set_dict[cell] = set([x for x, y in df_binary.loc[cell].items() if y == 0])
+
+    eq_class_list = []
+    for cell in df_binary.index:
+        # check if it belongs to an existing equivalence class
+        flag = 0
+        for eq_class in eq_class_list:
+            leader_cell = eq_class[0]
+            if (one_set_dict[leader_cell].issuperset(one_set_dict[cell]) and
+                zero_set_dict[leader_cell].issuperset(zero_set_dict[cell])):
+                eq_class.append(cell)
+                flag = 1
+                break
+            elif (one_set_dict[cell].issuperset(one_set_dict[leader_cell]) and
+                  zero_set_dict[cell].issuperset(zero_set_dict[leader_cell])):
+                eq_class.appendleft(cell)
+                flag = 1
+                break
+
+        if flag == 0:
+            eq_class_list.append(deque([cell]))
+
+    # map from leader to equivalence class
+    eq_class_dict = {eq_class[0]: list(eq_class) for eq_class in eq_class_list}
+
+    # drop non-leader cells in each equivalence class
+    for eq_class in eq_class_list:
+        for cell in eq_class:
+            if cell == eq_class[0]: continue
+            df_character_matrix = df_character_matrix.drop(cell, axis=0)
+
+    return eq_class_dict, df_character_matrix
+
+def prune_tree(tree, eq_class_leaders):
+    T = tree.copy()
+    while True:
+        leaves_to_prune = [v for v in T.nodes if is_leaf(T, v) and v not in eq_class_leaders]
+        if not leaves_to_prune: break
+        for leaf in leaves_to_prune:
+            T.remove_node(leaf)
+
+    return T
+
 
