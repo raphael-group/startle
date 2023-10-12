@@ -294,6 +294,16 @@ def prune_tree(tree, eq_class_leaders):
         for leaf in leaves_to_prune:
             T.remove_node(leaf)
 
+    # remove all unifurcations
+    while True:
+        unifurcations = [v for v in T.nodes if T.out_degree(v) == 1 and T.in_degree(v) == 1]
+        if not unifurcations: break
+        for unifurcation in unifurcations:
+            parent = list(T.predecessors(unifurcation))[0]
+            child = list(T.successors(unifurcation))[0]
+            T.add_edge(parent, child)
+            T.remove_node(unifurcation)
+
     return T
 
 

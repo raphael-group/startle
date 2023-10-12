@@ -485,16 +485,19 @@ def infer_mode(args):
     random.seed(73)
 
     seed_tree = from_newick_get_nx_tree(args.seed_tree)
-    seed_tree = arbitrarily_resolve_polytomies(seed_tree)
+    logger.info(f"Unpruned tree size: {len(seed_tree.nodes)}")
 
     character_matrix = pd.read_csv(args.character_matrix, index_col=[0], dtype=str)
     character_matrix = character_matrix.replace('-', '-1')
     character_matrix.index = character_matrix.index.map(str)
 
-    logger.info(f"Unpruned tree size: {len(seed_tree.nodes)}")
+    # Prune tree and character matrix to only include distinct cells
     eq_class_dict, character_matrix = compute_equivalence_classes(character_matrix)
-    seed_tree = prune_tree(seed_tree, set(eq_class_dict.keys()))
     character_matrix = character_matrix.astype(str)
+
+    seed_tree = prune_tree(seed_tree, set(eq_class_dict.keys()))
+    seed_tree = arbitrarily_resolve_polytomies(seed_tree)
+
     logger.info(f"Pruned tree size: {len(seed_tree.nodes)}")
  
     mutation_prior_dict = load_mutation_prior_dict(args)
