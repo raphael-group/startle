@@ -1,6 +1,6 @@
 # Startle
 
-*Startle* is a set of methods for lineage tree reconstruction that attempts 
+*Startle* is a set of methods for lineage tree reconstruction that attempt 
 to infer the most parsimonious tree under the *star homoplasy* evolutionary 
 model. 
 
