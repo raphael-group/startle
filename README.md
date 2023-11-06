@@ -54,7 +54,7 @@ The output binary will be located at `build/src/startle`.
 
 To run *startle*, simply execute the binary. 
 ```
-(base) schmidt73@schmidt73:~/Desktop/startle/build$ ./src/startle 
+$ startle 
 Usage: startle [--help] [--version] {large,small}
 
 Optional arguments:
