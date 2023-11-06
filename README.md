@@ -19,73 +19,79 @@ If you found the tool useful in your research, please cite us at:
 }
 ```
 
-## startle-nni
+## Startle
 
-`startle-nni` is a Python command-line tool for inferring lineage trees from a cell-by-state 
-matrix. The only requirement for `startle-nni` is a recent
-version of Python and several packages, described below.
+### Automatic Installation
 
-Requirements:
-- [python3](https://www.python.org/downloads/)
-- [numpy](https://numpy.org/) 
-- [pandas](https://pandas.pydata.org/)
-- [biopython](https://biopython.org/wiki/Documentation)
-- [seaborn](https://seaborn.pydata.org/index.html)
-- [funcy](https://funcy.readthedocs.io/en/stable/)
-- [loguru](https://github.com/Delgan/loguru)
-
-To run `startle-nni`, simply run `python src/nni/startle.py` from the root project
-directory.
-
+`startle` can be installed automatically using Conda. 
+Simply execute,
 ```
-$ python src/nni/startle.py --help
-usage: startle.py [-h] [-e E] [-m M] [--iterations ITERATIONS] [--mode {collapse,score,infer}] [--threads THREADS] --output OUTPUT seed_tree character_matrix
+$ conda install -c schmidt73 startle
+```
+and Startle will be available as `startle`.
 
-positional arguments:
-  seed_tree             Seed tree in Newick format.
-  character_matrix      Character matrix.
+#### Manual installation
 
-options:
-  -h, --help            show this help message and exit
-  -e E                  Mutation prior pickle file.
-  -m M                  Mutation prior CSV table.
-  --iterations ITERATIONS
-                        Number of iterations to run stochastic hill climbing before giving up.
-  --mode {collapse,score,infer}
-                        Different modes have different functionality.
-  --threads THREADS     Number of threads to use.
-  --output OUTPUT       Output file for newick tree.
+`startle` is implemented in C++ and is packaged with the dependencies
+needed to execute the program. In particular, the only dependencies are
+a recent version of CMAKE and a modern C++17 compliant compiler.
+
+To build `startle` from source, first clone the repository and its submodules:
+```
+$ git clone --recurse-submodules https://github.com/raphael-group/startle.git
 ```
 
-The script requires several files, namely a `character_matrix` as a CSV, a `mutation_prior`
-file as either CSV or Pickle file, and a `seed_tree` as Newick file. An example character matrix and mutation prior file
+Then from the root of the project directory, execute the following sequence o
+commands:
+```
+$ mkdir build; cd build
+$ cmake ..
+$ make
+```
+The output binary will be located at `build/src/startle`.
+
+## Usage
+
+To run *startle*, simply execute the binary. 
+```
+(base) schmidt73@schmidt73:~/Desktop/startle/build$ ./src/startle 
+Usage: startle [--help] [--version] {large,small}
+
+Optional arguments:
+  -h, --help     shows help message and exits 
+  -v, --version  prints version information and exits 
+
+Subcommands:
+  large         Solves the star homoplasy LARGE parsimony problem.
+  small         Solves the star homoplasy SMALL parsimony problem.
+```
+
+The tool contains algorithms for the star homoplasy 
+SMALL and LARGE parsimony problems, available using the
+sub-commands `small` and `large`.
+
+### Input format
+
+Both algorithms implemented in `startle` require several files. In particular,
+`startle` requires a `character_matrix` file as a CSV, a `mutation_prior`
+file as a CSV, and a `tree` as Newick file. An example character matrix and mutation prior file
 can be found in `examples` under the names `examples/n100_m30_d0.2_s0_p0.2_character_matrix.csv` and
-`examples/n100_m30_d0.2_s0_p0.2_mutation_prior.csv`. A seed tree is the seed to start the stochastic search in `startle-nni`.
-It can be obtained from any algorithm, but for convenience, we have attached a script `script/nj.py` that generates
-a seed tree using neighbor joining from a `character_matrix`.
+`examples/n100_m30_d0.2_s0_p0.2_mutation_prior.csv`. 
 
-As an example, we can run `startle-nni` by first generating a seed tree
-and then running `src/nni/startle.py`.
+For the small parsimony algorithm, we compute the maximum parsimony score of the input tree under the 
+star homoplasy model. For the large parsimony algorith, the tree is the seed to start the stochastic search in `startle`.
+The seed tree can be obtained from any algorithm, but for convenience, we have attached a script `script/nj.py` that generates
+a seed tree using neighbor joining and a `character_matrix`.
+
+As an example, we can run `startle` by first generating a seed tree
+and then running `startle`.
 
 ```
 $ python scripts/nj.py examples/n100_m30_d0.2_s0_p0.2_character_matrix.csv --output examples/n100_m30_d0.2_s0_p0.2_seed_tree.newick
-$ python src/nni/startle.py -m examples/n100_m30_d0.2_s0_p0.2_mutation_prior.csv \
-  examples/n100_m30_d0.2_s0_p0.2_seed_tree.newick examples/n100_m30_d0.2_s0_p0.2_character_matrix.csv \
-  --output examples/n100_m30_d0.2_s0_p0.2_startle_nni_tree.newick
+$ startle large examples/n100_m30_d0.2_s0_p0.2_character_matrix.csv examples/n100_m30_d0.2_s0_p0.2_mutation_prior.csv \
+          examples/n100_m30_d0.2_s0_p0.2_seed_tree.newick  \
+          --output examples/n100_m30_d0.2_s0_p0.2_startle
 ```
-
-There are several important command line flags that
-can alter the behavior of `startle-nni`. These are described here:
-- `--threads`: sets the number of threads to use when performing hill climbing, 
-   can be set to the number of cores to speed up the algorithm.
-- `--iterations`: the number of iterations to run hill climbing *without any improvement*
-   to the parsimony objective before stopping. We recommend setting this to around 200.
-- `--mode`: can be set to one of `{collapse, score, infer}`. `infer` is the default
-   mode to be used when trying to infer a tree using `startle-nni`. `score` is used
-   to compute the value of the small parsimony objective using the star homoplasy model
-   on the input tree. `collapse` collapses mutationless edges after inferring ancestral
-   labelings using the small parsimony objective under the star homoplasy model on the 
-   input tree.
 
 ## startle-ILP
 
