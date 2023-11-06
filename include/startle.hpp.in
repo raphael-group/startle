@@ -1,0 +1,7 @@
+#ifndef _STARTLE_H
+#define _STARTLE_H
+
+#define STARTLE_VERSION_MAJOR @startle_VERSION_MAJOR@
+#define STARTLE_VERSION_MINOR @startle_VERSION_MINOR@
+
+#endif
