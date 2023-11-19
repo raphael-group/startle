@@ -19,7 +19,7 @@ If you found the tool useful in your research, please cite us at:
 }
 ```
 
-## Startle
+## startle
 
 ### Automatic Installation
 
@@ -41,7 +41,7 @@ To build `startle` from source, first clone the repository and its submodules:
 $ git clone --recurse-submodules https://github.com/raphael-group/startle.git
 ```
 
-Then from the root of the project directory, execute the following sequence o
+Then from the root of the project directory, execute the following sequence of
 commands:
 ```
 $ mkdir build; cd build
