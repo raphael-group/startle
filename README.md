@@ -79,12 +79,12 @@ can be found in `examples` under the names `examples/n100_m30_d0.2_s0_p0.2_chara
 `examples/n100_m30_d0.2_s0_p0.2_mutation_prior.csv`. 
 
 For the small parsimony algorithm, we compute the maximum parsimony score of the input tree under the 
-star homoplasy model. For the large parsimony algorith, the tree is the seed to start the stochastic search in `startle`.
+star homoplasy model. For the large parsimony algorithm, the tree is the seed to start the stochastic search in `startle`.
 The seed tree can be obtained from any algorithm, but for convenience, we have attached a script `script/nj.py` that generates
 a seed tree using neighbor joining and a `character_matrix`.
 
 As an example, we can run `startle` by first generating a seed tree
-and then running `startle`.
+and then running the `startle` command.
 
 ```
 $ python scripts/nj.py examples/n100_m30_d0.2_s0_p0.2_character_matrix.csv --output examples/n100_m30_d0.2_s0_p0.2_seed_tree.newick
