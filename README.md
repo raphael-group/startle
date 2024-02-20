@@ -9,13 +9,15 @@ model.
 If you found the tool useful in your research, please cite us at:
 
 ```
-@article{sashittal2022startle,
-  title={Startle: a star homoplasy approach for CRISPR-Cas9 lineage tracing},
-  author={Sashittal, Palash and Schmidt, Henri and Chan, Michelle M and Raphael, Benjamin J},
-  journal={bioRxiv},
-  pages={2022--12},
-  year={2022},
-  publisher={Cold Spring Harbor Laboratory}
+@article{sashittal2023startle,
+  title={Startle: a star homoplasy approach for crispr-cas9 lineage tracing},
+  author={Sashittal, Palash and Schmidt, Henri and Chan, Michelle and Raphael, Benjamin J},
+  journal={Cell Systems},
+  volume={14},
+  number={12},
+  pages={1113--1121},
+  year={2023},
+  publisher={Elsevier}
 }
 ```
 
