@@ -163,7 +163,7 @@ namespace starhomoplasy {
             }
         }
     }
-    
+
     /*
       Performs all NNIs in the immediate neighborhood of the passed in
       tree and returns the best move. Does not modify the input tree.

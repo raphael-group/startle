@@ -274,62 +274,98 @@ void solve_large_parsimony(argparse::ArgumentParser large) {
       perturbing candidate trees.
      */
     std::vector<digraph<star_homoplasy_data>> candidate_trees;
-    float aggressions[] = {0, 0.25, 0.50, 0.75, 1, 1.25, 1.5, 1.75};
-    for (float aggression : aggressions) {
+    unsigned int num_candidate_trees = large.get<unsigned int>("--num-candidates");
+    for (int i = 0; i < num_candidate_trees; i++) {
+        float aggression = 0.2 * i;
         digraph<star_homoplasy_data> t = stochastic_nni(tree, gen, aggression);
+        small_parsimony(t, mutation_priors, M, 0, 0);
         candidate_trees.push_back(t);
+        spdlog::info("candidate tree (aggression {}) score: {}", aggression, t[0].data.parsimony_score);
     }
 
+
+    unsigned int num_threads = large.get<unsigned int>("-t");
+    if (num_threads > 1) {
+        spdlog::info("using {} threads", num_threads);
+    }
+    
+    std::mutex progress_mutex;
+    std::vector<std::thread> threads;
+
     json progress_information;
-    size_t counter = 0, iteration = 0;
-    for (; counter < large.get<size_t>("-i"); iteration++) {
-        for (auto& candidate_tree : candidate_trees) {
-            small_parsimony(candidate_tree, mutation_priors, M, 0, 0);
-        }
+    std::atomic<size_t> counter = 0, iteration = 0;
+    for (unsigned int i = 0; i < num_threads; i++) {
+        threads.push_back(std::thread([&]() {
+            int thread_id = i;
+            std::random_device rd;
+            std::ranlux48_base gen(rd());
 
-        std::sort(candidate_trees.begin(), candidate_trees.end(),
-                  [](const digraph<star_homoplasy_data> &a, const digraph<star_homoplasy_data> &b) {
-                      return a[0].data.parsimony_score > b[0].data.parsimony_score;
-        });
+            while (counter < large.get<size_t>("-i")) {
+                int current_iteration = iteration.load();
+                iteration++;
 
-        std::vector<double> scores;
-        for (auto& candidate_tree : candidate_trees) {
-            scores.push_back(candidate_tree[0].data.parsimony_score);
-        }
+                std::vector<double> scores;
+                {
+                    std::lock_guard<std::mutex> lock(progress_mutex);
+                    for (auto& candidate_tree : candidate_trees) {
+                        scores.push_back(candidate_tree[0].data.parsimony_score);
+                    }
 
-        json progress_information_i;
-        progress_information_i["scores"] = scores;
-        progress_information_i["iteration"] = iteration;
-        progress_information.push_back(progress_information_i);
+                    json progress_information_i;
+                    progress_information_i["scores"] = scores;
+                    progress_information_i["iteration"] = current_iteration;
+                    progress_information.push_back(progress_information_i);
+                }
+                
+                /* compute summary statistics of candidate tree scores */
+                { 
+                    double min = *std::min_element(scores.begin(), scores.end());
+                    double max = *std::max_element(scores.begin(), scores.end());
+                    double median = scores[scores.size() / 2];
+                    double mean = std::accumulate(scores.begin(), scores.end(), 0.0) / scores.size();
 
-        /* compute summary statistics of candidate tree scores */
-        { 
-            double min = *std::min_element(scores.begin(), scores.end());
-            double max = *std::max_element(scores.begin(), scores.end());
-            double median = scores[scores.size() / 2];
-            double mean = std::accumulate(scores.begin(), scores.end(), 0.0) / scores.size();
+                    spdlog::info("(thread {}, iteration {}, counter {}) parsimony scores min: {:.2f}, max: {:.2f}, median: {:.2f}, mean: {:.2f}", 
+                                 thread_id, current_iteration, counter, min, max, median, mean );
+                }
 
-            spdlog::info("iteration {} weighted parsimony scores min: {:.2f}, max: {:.2f}, median: {:.2f}, mean: {:.2f}", 
-                         iteration, min, max, median, mean );
-        }
-        // Select and perturb candidate tree.
-        std::uniform_int_distribution<int> distrib(0, candidate_trees.size() - 1);
-        int candidate_tree_idx = distrib(gen);
+                // Select and perturb candidate tree.
+                std::uniform_int_distribution<int> distrib(0, num_candidate_trees - 1);
+                int candidate_tree_idx = distrib(gen);
 
-        digraph<star_homoplasy_data> candidate_tree = candidate_trees[candidate_tree_idx];
-        std::uniform_real_distribution<double> aggression_distrib(0, large.get<double>("-a"));
-        candidate_tree = stochastic_nni(candidate_tree, gen, aggression_distrib(gen)); // seems to be a NO OP
+                digraph<star_homoplasy_data> candidate_tree;
 
-        digraph<star_homoplasy_data> updated_tree = hill_climb(candidate_tree, mutation_priors, M, gen, large.get<bool>("-g"));
-        spdlog::info("updated tree score: {}", updated_tree[0].data.parsimony_score);
-        if (updated_tree[0].data.parsimony_score < candidate_trees[0][0].data.parsimony_score) {
-            candidate_trees[0] = updated_tree;
-            spdlog::info("updated candidate tree set.");
-            counter = 0;
-            continue;
-        } 
+                {
+                    // copy candidate tree
+                    std::lock_guard<std::mutex> lock(progress_mutex);
+                    candidate_tree = candidate_trees[candidate_tree_idx];
+                }
 
-        counter++;
+                std::uniform_real_distribution<double> aggression_distrib(0, large.get<double>("-a"));
+                candidate_tree = stochastic_nni(candidate_tree, gen, aggression_distrib(gen)); // seems to be a NO OP
+
+                digraph<star_homoplasy_data> updated_tree = hill_climb(candidate_tree, mutation_priors, M, gen, large.get<bool>("-g"));
+                spdlog::info("thread ID {}: updated tree score is {}", thread_id, updated_tree[0].data.parsimony_score);
+
+                std::lock_guard<std::mutex> lock(progress_mutex);
+                counter++;
+                auto maximum_it = std::max_element(
+                        candidate_trees.begin(), candidate_trees.end(), 
+                        [](const digraph<star_homoplasy_data> &a, const digraph<star_homoplasy_data> &b) {
+                            return a[0].data.parsimony_score < b[0].data.parsimony_score;
+                });
+
+                if (updated_tree[0].data.parsimony_score < (*maximum_it)[0].data.parsimony_score) {
+                    *maximum_it = updated_tree;
+                    spdlog::info("thread ID {}: updated candidate tree set.", thread_id);
+                    counter = 0;
+                    continue;
+                } 
+            }
+        }));
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
     }
 
     for (auto& candidate_tree : candidate_trees) {
@@ -414,12 +450,12 @@ int main(int argc, char *argv[])
 
     large.add_argument("-i", "--iterations")
           .help("number of iterations to use in the stochastic hill climbing algorithm")
-          .default_value((size_t) 100)
+          .default_value((size_t) 400)
           .scan<'u', size_t>();
 
     large.add_argument("-a", "--aggression")
           .help("aggression of the stochastic hill climbing algorithm")
-          .default_value(0.2)
+          .default_value(0.4)
           .scan<'f', double>();
 
     large.add_argument("-r", "--random-seed") // TODO: get working
@@ -441,6 +477,11 @@ int main(int argc, char *argv[])
           .help("use unweighted parsimony")
           .default_value(false)
           .implicit_value(true);
+
+    large.add_argument("--num-candidates")
+          .help("number of candidate trees to use in the stochastic hill climbing algorithm")
+          .default_value(10U)
+          .scan<'u', unsigned int>();
 
     program.add_subparser(small);
     program.add_subparser(large);
